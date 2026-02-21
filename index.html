@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#3366ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Flights">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Flights</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --surface: #ffffff;
+    --surface2: #f0f2f5;
+    --border: #e2e5ea;
+    --border-light: #eef0f4;
+    --text: #1a1f2e;
+    --text-mid: #4a5066;
+    --text-dim: #7c8294;
+    --accent: #3366ff;
+    --accent-light: #eef2ff;
+    --sep: #059669;
+    --sep-bg: #ecfdf5;
+    --mep: #7c3aed;
+    --mep-bg: #f3f0ff;
+    --pic: #2563eb;
+    --pic-bg: #eff4ff;
+    --dual: #d97706;
+    --dual-bg: #fffbeb;
+    --vfr: #0891b2;
+    --vfr-bg: #ecfeff;
+    --ifr: #dc2626;
+    --ifr-bg: #fef2f2;
+    --day: #ea580c;
+    --day-bg: #fff7ed;
+    --night: #4f46e5;
+    --night-bg: #eef2ff;
+    --radius: 14px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .loading-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+    transition: opacity 0.4s;
+  }
+  .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  header {
+    padding: 20px 32px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+    box-shadow: var(--shadow-sm);
+    position: sticky; top: 0; z-index: 50;
+  }
+  header h1 {
+    font-size: 20px; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 10px;
+  }
+  header h1 .icon-wrap {
+    width: 34px; height: 34px;
+    background: var(--accent-light);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  header h1 svg { width: 20px; height: 20px; color: var(--accent); }
+  .header-meta { color: var(--text-dim); font-size: 13px; font-weight: 500; }
+
+  /* Global filter bar */
+  .global-filters {
+    padding: 14px 32px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-row {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end;
+  }
+  .filter-row select, .filter-row .date-display {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .date-input-wrap {
+    position: relative; display: inline-block;
+  }
+  .date-input-wrap .date-display {
+    width: 100%; min-width: 90px; max-width: 105px;
+  }
+  .date-input-wrap .date-native {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; z-index: 1;
+  }
+  .filter-row select:hover, .filter-row input:hover { border-color: #b0b6c4; }
+  .filter-row select:focus, .filter-row input:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(51,102,255,0.1);
+  }
+  .filter-group {
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .filter-group label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--text-dim); font-weight: 600;
+  }
+  .btn-reset {
+    background: var(--surface); color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 14px; font-size: 13px; cursor: pointer;
+    font-family: inherit; font-weight: 500;
+    transition: all 0.15s;
+  }
+  .btn-reset:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-light); }
+
+  /* Active filter chips */
+  .active-filters {
+    padding: 0 32px;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    min-height: 0;
+    transition: all 0.2s;
+  }
+  .active-filters.has-filters { padding-top: 14px; padding-bottom: 2px; }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent-light);
+    color: var(--accent);
+    border: 1px solid rgba(51,102,255,0.2);
+    border-radius: 20px;
+    padding: 4px 10px 4px 12px;
+    font-size: 12px; font-weight: 600;
+  }
+  .filter-chip .chip-remove {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgba(51,102,255,0.1);
+    border: none; color: var(--accent);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; line-height: 1;
+    transition: background 0.15s;
+  }
+  .filter-chip .chip-remove:hover { background: rgba(51,102,255,0.2); }
+  .filtered-summary {
+    font-size: 12px; color: var(--text-dim); font-weight: 500;
+    margin-left: 8px;
+  }
+  .filtered-summary b { color: var(--text); font-weight: 700; }
+
+  /* KPI strip */
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 14px;
+    padding: 20px 32px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .kpi:hover { box-shadow: var(--shadow); }
+  .kpi-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-dim); font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .kpi-value { font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .kpi-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; font-weight: 500; }
+
+  /* Paired KPI (e.g. SEP / MEP) */
+  .kpi-pair {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column; gap: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .kpi-pair:hover { box-shadow: var(--shadow); }
+  .kpi-pair.kpi-active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(51,102,255,0.12); }
+  .kpi-pair-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-dim); font-weight: 600;
+  }
+  .kpi-pair-row {
+    display: flex; gap: 0; align-items: stretch;
+    flex: 1;
+  }
+  .kpi-half {
+    flex: 1;
+    display: flex; flex-direction: column; justify-content: center; gap: 2px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .kpi-half:hover { filter: brightness(0.97); }
+  .kpi-half.active { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .kpi-half-label { font-size: 11px; font-weight: 700; letter-spacing: 0.3px; }
+  .kpi-half-value { font-size: 22px; font-weight: 700; line-height: 1.1; }
+  .kpi-half-sub { font-size: 11px; font-weight: 500; opacity: 0.7; }
+  .kpi-divider {
+    width: 1px;
+    background: var(--border);
+    margin: 4px 6px;
+    align-self: stretch;
+  }
+  /* Pair bar */
+  .kpi-bar {
+    height: 5px; border-radius: 3px; display: flex; overflow: hidden;
+    background: var(--surface2);
+  }
+  .kpi-bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  /* Color schemes for pairs */
+  .pair-sep { background: var(--sep-bg); }
+  .pair-sep .kpi-half-label, .pair-sep .kpi-half-value { color: var(--sep); }
+  .pair-mep { background: var(--mep-bg); }
+  .pair-mep .kpi-half-label, .pair-mep .kpi-half-value { color: var(--mep); }
+  .pair-pic { background: var(--pic-bg); }
+  .pair-pic .kpi-half-label, .pair-pic .kpi-half-value { color: var(--pic); }
+  .pair-dual { background: var(--dual-bg); }
+  .pair-dual .kpi-half-label, .pair-dual .kpi-half-value { color: var(--dual); }
+  .pair-vfr { background: var(--vfr-bg); }
+  .pair-vfr .kpi-half-label, .pair-vfr .kpi-half-value { color: var(--vfr); }
+  .pair-ifr { background: var(--ifr-bg); }
+  .pair-ifr .kpi-half-label, .pair-ifr .kpi-half-value { color: var(--ifr); }
+  .pair-day { background: var(--day-bg); }
+  .pair-day .kpi-half-label, .pair-day .kpi-half-value { color: var(--day); }
+  .pair-night { background: var(--night-bg); }
+  .pair-night .kpi-half-label, .pair-night .kpi-half-value { color: var(--night); }
+
+  .dashboard {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 0 32px 32px;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 22px;
+    display: flex; flex-direction: column;
+    box-shadow: var(--shadow-sm);
+    min-width: 0;
+    overflow: hidden;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.3px;
+    color: var(--text-mid);
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .card-subtitle {
+    font-size: 12px; color: var(--text-dim); font-weight: 500;
+  }
+  .card-body { flex: 1; position: relative; min-height: 0; }
+  .chart-container {
+    position: relative; width: 100%; height: 280px;
+    cursor: pointer;
+  }
+
+  #map { width: 100%; height: 100%; min-height: 420px; border-radius: 10px; z-index: 0; }
+  #map .leaflet-container { width: 100% !important; }
+  .btn-map-center {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--surface); color: var(--text-mid);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-map-center:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-light); }
+  .btn-map-center svg { flex-shrink: 0; }
+
+  .flight-table-wrapper {
+    overflow: auto; max-height: 500px;
+    border-radius: 10px;
+    border: 1px solid var(--border-light);
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-summary {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    padding: 10px 0;
+    font-size: 12px; color: var(--text-dim); font-weight: 500;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 10px;
+  }
+  .table-summary b { color: var(--text); font-weight: 700; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead { position: sticky; top: 0; z-index: 2; }
+  th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-dim);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  th:hover { color: var(--text); }
+  th .sort-arrow { margin-left: 4px; font-size: 10px; }
+  td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+    color: var(--text-mid);
+  }
+  tr:hover td { background: #f8f9fb; }
+
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+  }
+  .pill:hover { filter: brightness(0.95); }
+  .pill-sep { background: var(--sep-bg); color: var(--sep); }
+  .pill-mep { background: var(--mep-bg); color: var(--mep); }
+  .pill-pic { background: var(--pic-bg); color: var(--pic); }
+  .pill-dual { background: var(--dual-bg); color: var(--dual); }
+
+  .tab-bar {
+    display: flex; gap: 2px; margin-bottom: 16px;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 3px;
+  }
+  .tab-btn {
+    background: none; border: none; color: var(--text-dim);
+    padding: 7px 14px; font-size: 12px; cursor: pointer;
+    border-radius: 8px; font-weight: 600; font-family: inherit;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); background: var(--surface); box-shadow: var(--shadow-sm); }
+
+  /* Drill-down panel */
+  .drill-panel {
+    position: fixed; top: 0; right: -540px; width: 520px; height: 100vh;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    transition: right 0.3s ease;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .drill-panel.open { right: 0; }
+  .drill-panel-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .drill-panel-header h3 {
+    font-size: 16px; font-weight: 700; color: var(--text);
+  }
+  .drill-panel-close {
+    background: none; border: none; color: var(--text-dim);
+    font-size: 22px; cursor: pointer; padding: 4px 8px;
+    border-radius: 6px; transition: all 0.15s;
+  }
+  .drill-panel-close:hover { color: var(--text); background: var(--surface2); }
+  .drill-panel-stats {
+    padding: 16px 24px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg);
+  }
+  .drill-stat { display: flex; flex-direction: column; gap: 2px; }
+  .drill-stat-label { font-size: 10px; text-transform: uppercase; color: var(--text-dim); font-weight: 600; letter-spacing: 0.3px; }
+  .drill-stat-value { font-size: 17px; font-weight: 700; color: var(--text); }
+  .drill-panel-body {
+    flex: 1; overflow: auto; padding: 0;
+  }
+  .drill-panel-body table { font-size: 12px; }
+  .drill-panel-body td { padding: 7px 12px; }
+  .drill-panel-body th { padding: 9px 12px; font-size: 10px; }
+  .drill-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: blur(2px);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .drill-overlay.open { opacity: 1; pointer-events: all; }
+
+  @media (max-width: 1200px) {
+    .kpi-strip { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 900px) {
+    .dashboard { grid-template-columns: 1fr; }
+    .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+    header, .kpi-strip, .dashboard, .global-filters, .active-filters { padding-left: 16px; padding-right: 16px; }
+    .drill-panel { width: 100%; right: -100%; }
+  }
+  @media (max-width: 600px) {
+    header { padding: 14px 12px 10px; position: sticky; top: 0; z-index: 50; }
+    header h1 { font-size: 17px; }
+    header h1 .icon-wrap { width: 28px; height: 28px; border-radius: 8px; }
+    header h1 svg { width: 16px; height: 16px; }
+    .header-meta { font-size: 11px; }
+    .global-filters { padding: 10px 12px; }
+    .filter-row { gap: 6px; }
+    .filter-row select, .filter-row .date-display { font-size: 12px; padding: 6px 8px; }
+    .filter-group label { font-size: 9px; }
+    .btn-reset { padding: 6px 10px; font-size: 12px; }
+    .active-filters { padding-left: 12px; padding-right: 12px; }
+    .active-filters.has-filters { padding-top: 10px; }
+    .kpi-strip { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
+    .kpi { padding: 12px 14px; }
+    .kpi-value { font-size: 22px; }
+    .kpi-label { font-size: 10px; }
+    .kpi-sub { font-size: 11px; }
+    .kpi-pair { padding: 12px 14px; }
+    .kpi-half { padding: 8px 10px; }
+    .kpi-half-value { font-size: 18px; }
+    .kpi-half-label { font-size: 10px; }
+    .kpi-half-sub { font-size: 10px; }
+    .dashboard { padding: 0 12px 20px; gap: 12px; }
+    .card { padding: 14px; border-radius: 12px; }
+    .card-header { margin-bottom: 12px; }
+    #map { min-height: 300px; }
+    .chart-container { height: 220px; }
+    .flight-table-wrapper { max-height: 400px; font-size: 12px; }
+    th { padding: 8px 8px; font-size: 11px; }
+    td { padding: 8px 8px; }
+    .table-summary { gap: 10px; font-size: 11px; }
+    .drill-panel { width: 100%; right: -100%; }
+    .drill-panel-content { padding: 16px; }
+  }
+  @media (max-width: 380px) {
+    .kpi-strip { grid-template-columns: 1fr; }
+    .kpi-half-value { font-size: 16px; }
+    .kpi-value { font-size: 20px; }
+  }
+
+  .leaflet-popup-content-wrapper {
+    background: var(--surface) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+    box-shadow: var(--shadow-lg) !important;
+  }
+  .leaflet-popup-tip { background: var(--surface) !important; }
+  .leaflet-popup-content { font-size: 13px; line-height: 1.6; font-family: 'Inter', sans-serif; }
+  .leaflet-popup-content b { color: var(--accent); }
+
+  .airport-tooltip {
+    background: var(--surface) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    font-family: 'Inter', sans-serif !important;
+    box-shadow: var(--shadow-lg) !important;
+    line-height: 1.5 !important;
+    white-space: nowrap !important;
+  }
+  .airport-tooltip b { color: var(--accent); font-weight: 700; }
+  .route-tooltip { pointer-events: none !important; }
+  .icao-label {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: #1e293b !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    font-family: 'Inter', sans-serif !important;
+    padding: 0 !important;
+    white-space: nowrap !important;
+    letter-spacing: 0.3px !important;
+  }
+  .icao-label::before { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div style="color: var(--text-dim); font-size: 14px; font-weight: 500;">Loading flight data...</div>
+</div>
+
+<header>
+  <h1>
+    <div class="icon-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.4 3.1-2.2 2.2-1.7-.3c-.4-.1-.8.1-.9.4l-.2.3c-.2.3-.1.7.2.9l2.4 1.5 1.5 2.4c.2.3.6.4.9.2l.3-.2c.3-.2.4-.6.4-.9l-.3-1.7 2.2-2.2 3.1 5.4c.3.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/>
+      </svg>
+    </div>
+    Flights
+  </h1>
+  <div class="header-meta" id="headerMeta"></div>
+</header>
+
+<div class="global-filters">
+  <div class="filter-row">
+    <div class="filter-group">
+      <label>Engine</label>
+      <select id="gfEngine"><option value="">All</option><option>SEP</option><option>MEP</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Role</label>
+      <select id="gfRole"><option value="">All</option><option>PIC</option><option>Dual</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Day / Night</label>
+      <select id="gfDayNight"><option value="">All</option><option>Day</option><option>Night</option><option>Day/Night</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Rules</label>
+      <select id="gfRules"><option value="">All</option><option>VFR</option><option>IFR</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Aircraft</label>
+      <select id="gfAircraft"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Type</label>
+      <select id="gfType"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Airport</label>
+      <select id="gfAirport"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Period</label>
+      <select id="gfPeriod">
+        <option value="">All time</option>
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="180">Last 6 months</option>
+        <option value="365">Last 12 months</option>
+        <option value="ytd">This year</option>
+        <option value="lastyear">Last year</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>From date</label>
+      <div class="date-input-wrap">
+        <input type="text" id="gfDateFrom" class="date-display" placeholder="yyyy-mm-dd" readonly>
+        <input type="date" class="date-native" tabindex="-1">
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>To date</label>
+      <div class="date-input-wrap">
+        <input type="text" id="gfDateTo" class="date-display" placeholder="yyyy-mm-dd" readonly>
+        <input type="date" class="date-native" tabindex="-1">
+      </div>
+    </div>
+    <button class="btn-reset" id="btnReset">Reset</button>
+    <button class="btn-reset" id="btnReload" style="margin-left:auto">Reload</button>
+  </div>
+</div>
+
+<div class="active-filters" id="activeFilters"></div>
+
+<div class="kpi-strip" id="kpiStrip"></div>
+
+<div class="dashboard">
+  <div class="card wide">
+    <div class="card-header">
+      <div class="card-title">Route Map</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="card-subtitle" id="mapSubtitle"></div>
+        <button class="btn-map-center" id="btnMapCenter" title="Fit all airports in view">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+          </svg>
+          Fit All
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Hours by Month</div>
+      <div class="card-subtitle" id="monthlySubtitle">Click a bar to drill in</div>
+    </div>
+    <div class="card-body">
+      <div class="chart-container"><canvas id="chartMonthly"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Aircraft Distribution</div>
+      <div class="card-subtitle">Click a segment to filter</div>
+    </div>
+    <div class="card-body">
+      <div class="chart-container"><canvas id="chartAircraft"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Flight Conditions</div>
+      <div class="card-subtitle">Click a segment to filter</div>
+    </div>
+    <div class="card-body">
+      <div class="tab-bar" id="condTabs">
+        <button class="tab-btn active" data-tab="engine">SEP / MEP</button>
+        <button class="tab-btn" data-tab="role">PIC / Dual</button>
+        <button class="tab-btn" data-tab="daytime">Day / Night</button>
+        <button class="tab-btn" data-tab="rules">VFR / IFR</button>
+      </div>
+      <div class="chart-container"><canvas id="chartConditions"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Cumulative Hours</div>
+      <div class="card-subtitle" id="cumulativeSubtitle"></div>
+    </div>
+    <div class="card-body">
+      <div class="chart-container"><canvas id="chartCumulative"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card wide">
+    <div class="card-header">
+      <div class="card-title">Airports</div>
+      <div class="card-subtitle">Click a bar to drill in</div>
+    </div>
+    <div class="card-body">
+      <div class="chart-container"><canvas id="chartRoutes"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card wide" id="tableCard">
+    <div class="card-header">
+      <div class="card-title">Flights</div>
+      <div class="card-subtitle" id="tableSubtitle"></div>
+    </div>
+    <div class="card-body">
+      <div class="table-summary" id="tableSummary"></div>
+      <div class="flight-table-wrapper">
+        <table id="flightTable">
+          <thead>
+            <tr>
+              <th data-col="date">Date <span class="sort-arrow"></span></th>
+              <th data-col="reg">A/C <span class="sort-arrow"></span></th>
+              <th data-col="type">Type <span class="sort-arrow"></span></th>
+              <th data-col="from">From <span class="sort-arrow"></span></th>
+              <th data-col="to">To <span class="sort-arrow"></span></th>
+              <th data-col="duration">Duration <span class="sort-arrow"></span></th>
+              <th data-col="engine">Engine <span class="sort-arrow"></span></th>
+              <th data-col="role">Role <span class="sort-arrow"></span></th>
+              <th data-col="dayNight">Day/Night <span class="sort-arrow"></span></th>
+              <th data-col="rules">Rules <span class="sort-arrow"></span></th>
+              <th data-col="ldgD">Ldg D <span class="sort-arrow"></span></th>
+              <th data-col="ldgN">Ldg N <span class="sort-arrow"></span></th>
+            </tr>
+          </thead>
+          <tbody id="flightTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Drill-down panel -->
+<div class="drill-overlay" id="drillOverlay"></div>
+<div class="drill-panel" id="drillPanel">
+  <div class="drill-panel-header">
+    <h3 id="drillTitle">Drill Down</h3>
+    <button class="drill-panel-close" id="drillClose">&times;</button>
+  </div>
+  <div class="drill-panel-stats" id="drillStats"></div>
+  <div class="drill-panel-body">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th><th>A/C</th><th>From</th><th>To</th>
+          <th>Time</th><th>Engine</th><th>Role</th><th>Rules</th>
+        </tr>
+      </thead>
+      <tbody id="drillTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const SHEET_ID = '16q_fQgB5gYqoXNhTL-o6okIw6Jk6C3H3dsgNdToCGw4';
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Log`;
+
+// Known airports (seed cache – new airports are resolved automatically)
+const AIRPORTS = {
+  EFLA: { lat: 61.1455, lon: 25.6921, name: "Lahti Vesivehmaa" },
+  EFHV: { lat: 60.6544, lon: 24.8811, name: "Hyvinkaa" },
+  EFUT: { lat: 60.8964, lon: 26.9384, name: "Utti" },
+  EFPR: { lat: 60.4792, lon: 26.5939, name: "Pyhtaa" },
+  EFTP: { lat: 61.4141, lon: 23.6044, name: "Tampere-Pirkkala" },
+  EFTS: { lat: 61.7734, lon: 24.0270, name: "Teisko" },
+  EFHA: { lat: 61.8560, lon: 24.7867, name: "Halli" },
+  EFMI: { lat: 61.6866, lon: 27.2018, name: "Mikkeli" },
+  EFNU: { lat: 60.3339, lon: 24.2964, name: "Nummela" },
+  EFMA: { lat: 60.1222, lon: 19.8982, name: "Mariehamn" },
+  EEKA: { lat: 58.9908, lon: 22.8307, name: "Kardla" },
+  EFPO: { lat: 61.4617, lon: 21.8000, name: "Pori" },
+  EFJO: { lat: 62.6588, lon: 29.6194, name: "Joensuu" },
+  EFSI: { lat: 62.6921, lon: 22.8323, name: "Seinajoki" },
+  EFPK: { lat: 62.2649, lon: 27.0030, name: "Pieksamaki" },
+  EFVA: { lat: 63.0507, lon: 21.7622, name: "Vaasa" },
+  EFHK: { lat: 60.3184, lon: 24.9633, name: "Helsinki-Vantaa" },
+  EETU: { lat: 58.3074, lon: 26.6865, name: "Tartu" },
+  EFJY: { lat: 62.3995, lon: 25.6783, name: "Jyvaskyla" },
+  EFKU: { lat: 63.0087, lon: 27.7945, name: "Kuopio" },
+  ESSB: { lat: 59.3544, lon: 17.9417, name: "Stockholm Bromma" },
+  LOAN: { lat: 47.8433, lon: 16.2601, name: "Wiener Neustadt" },
+  EKRK: { lat: 55.5856, lon: 12.1314, name: "Roskilde" },
+  EFTU: { lat: 60.5141, lon: 22.2628, name: "Turku" },
+};
+
+// Resolve unknown ICAO airports via OpenStreetMap Nominatim
+async function resolveUnknownAirports(flights) {
+  const allCodes = new Set();
+  flights.forEach(f => { allCodes.add(f.from); allCodes.add(f.to); });
+  const unknown = [...allCodes].filter(c => c && !AIRPORTS[c]);
+  if (!unknown.length) return;
+  console.log('Resolving unknown airports:', unknown);
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+  for (const icao of unknown) {
+    try {
+      // Nominatim requires ~1s between requests (usage policy)
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(icao + ' airport')}&format=json&limit=1`;
+      const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const data = await resp.json();
+      if (data.length) {
+        const name = data[0].display_name.split(',')[0].replace(/airport/i, '').trim() || icao;
+        AIRPORTS[icao] = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), name };
+        console.log(`Resolved ${icao}: ${name} (${data[0].lat}, ${data[0].lon})`);
+      } else {
+        console.warn(`Could not resolve airport: ${icao}`);
+      }
+      await delay(1100); // respect Nominatim rate limit
+    } catch (err) {
+      console.warn(`Failed to resolve ${icao}:`, err);
+    }
+  }
+}
+
+Chart.defaults.color = '#7c8294';
+Chart.defaults.borderColor = '#e2e5ea';
+Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
+
+// ─── Utilities ───
+function parseCSV(text) {
+  const rows = [];
+  let current = '', inQuotes = false, row = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { row.push(current.trim()); current = ''; }
+      else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+        row.push(current.trim()); current = '';
+        if (row.length > 1) rows.push(row);
+        row = [];
+        if (ch === '\r') i++;
+      } else { current += ch; }
+    }
+  }
+  if (current || row.length) { row.push(current.trim()); if (row.length > 1) rows.push(row); }
+  return rows;
+}
+
+function parseTime(s) {
+  if (!s) return 0;
+  const m = s.match(/(\d+):(\d+)/);
+  return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : 0;
+}
+function fmtTime(mins) {
+  if (!mins) return '0:00';
+  return `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
+}
+function pct(part, total) { return total > 0 ? Math.round(part / total * 100) + '%' : '0%'; }
+
+// ─── Data parsing ───
+function parseFlights(rows) {
+  const flights = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const date = r[0];
+    if (!date || !date.match(/^\d{4}-/)) continue;
+    if (!r[3] || !r[4]) continue; // skip rows missing from/to airports
+    const singleMin = parseTime(r[5]);
+    const multiMin = parseTime(r[6]);
+    const picMin = parseTime(r[13]);
+    const dualMin = parseTime(r[14]);
+    const nightMin = parseTime(r[11]);
+    const ifrMin = parseTime(r[12]);
+    const totalMin = singleMin + multiMin;
+    if (totalMin === 0) continue; // skip rows with no flight time
+    const role = picMin > 0 ? 'PIC' : 'Dual';
+    flights.push({
+      date, reg: r[1], type: r[2], from: r[3], to: r[4],
+      singleMin, multiMin, totalMin,
+      toD: parseInt(r[7]) || 0, toN: parseInt(r[8]) || 0,
+      ldgD: parseInt(r[9]) || 0, ldgN: parseInt(r[10]) || 0,
+      nightMin, ifrMin, picMin,
+      dualMin: totalMin - picMin,
+      engine: singleMin > 0 ? 'SEP' : 'MEP',
+      role,
+      dayNight: nightMin > 0 ? (nightMin >= totalMin ? 'Night' : 'Day/Night') : 'Day',
+      rules: ifrMin > 0 ? 'IFR' : 'VFR',
+    });
+  }
+  return flights;
+}
+
+// ─── State ───
+let allFlights = [];
+let sortCol = 'date';
+let sortDir = -1;
+let charts = { monthly: null, aircraft: null, conditions: null, cumulative: null, routes: null };
+let leafletMap = null;
+let mapLayers = [];
+let mapBounds = [];
+let currentCondTab = 'engine';
+
+// ─── Filter logic ───
+function getFilters() {
+  return {
+    engine: document.getElementById('gfEngine').value,
+    role: document.getElementById('gfRole').value,
+    dayNight: document.getElementById('gfDayNight').value,
+    rules: document.getElementById('gfRules').value,
+    aircraft: document.getElementById('gfAircraft').value,
+    type: document.getElementById('gfType').value,
+    airport: document.getElementById('gfAirport').value,
+    dateFrom: document.getElementById('gfDateFrom').value,
+    dateTo: document.getElementById('gfDateTo').value,
+  };
+}
+
+function setFilter(key, value) {
+  const elMap = {
+    engine: 'gfEngine', role: 'gfRole', dayNight: 'gfDayNight', rules: 'gfRules',
+    aircraft: 'gfAircraft', type: 'gfType', airport: 'gfAirport',
+    dateFrom: 'gfDateFrom', dateTo: 'gfDateTo',
+  };
+  const el = document.getElementById(elMap[key]);
+  if (el) {
+    el.value = value;
+    // Sync hidden native date picker if it's a date field
+    const wrap = el.closest('.date-input-wrap');
+    if (wrap) wrap.querySelector('.date-native').value = value;
+  }
+  // Clear period dropdown when dates are changed directly
+  if (key === 'dateFrom' || key === 'dateTo') {
+    document.getElementById('gfPeriod').value = '';
+  }
+  refreshAll();
+}
+
+function resetFilters() {
+  ['gfEngine','gfRole','gfDayNight','gfRules','gfAircraft','gfType','gfAirport','gfPeriod'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('gfDateFrom').value = '';
+  document.getElementById('gfDateTo').value = '';
+  document.querySelectorAll('.date-native').forEach(el => el.value = '');
+  refreshAll();
+}
+
+function applyFilters(flights) {
+  const f = getFilters();
+  return flights.filter(fl => {
+    if (f.engine && fl.engine !== f.engine) return false;
+    if (f.role && fl.role !== f.role) return false;
+    if (f.dayNight) {
+      if (f.dayNight === 'Night' && fl.nightMin === 0) return false;
+      if (f.dayNight === 'Day' && fl.nightMin > 0) return false;
+      if (f.dayNight === 'Day/Night' && fl.dayNight !== 'Day/Night') return false;
+    }
+    if (f.rules) {
+      if (f.rules === 'IFR' && fl.ifrMin === 0) return false;
+      if (f.rules === 'VFR' && fl.ifrMin > 0) return false;
+    }
+    if (f.aircraft && fl.reg !== f.aircraft) return false;
+    if (f.type && fl.type !== f.type) return false;
+    if (f.airport && fl.from !== f.airport && fl.to !== f.airport) return false;
+    if (f.dateFrom && fl.date < f.dateFrom) return false;
+    if (f.dateTo && fl.date > f.dateTo) return false;
+    return true;
+  });
+}
+
+function hasActiveFilters() {
+  return Object.values(getFilters()).some(v => v !== '');
+}
+
+// ─── Filter chips ───
+function renderFilterChips() {
+  const f = getFilters();
+  const container = document.getElementById('activeFilters');
+  const labels = {
+    engine: 'Engine', role: 'Role', dayNight: 'Day/Night', rules: 'Rules',
+    aircraft: 'Aircraft', type: 'Type', airport: 'Airport',
+    dateFrom: 'After', dateTo: 'Before',
+  };
+  const active = Object.entries(f).filter(([, v]) => v !== '');
+  if (active.length === 0) {
+    container.innerHTML = '';
+    container.classList.remove('has-filters');
+    return;
+  }
+  container.classList.add('has-filters');
+  const filtered = applyFilters(allFlights);
+  const totalMin = filtered.reduce((s, fl) => s + fl.totalMin, 0);
+  container.innerHTML = active.map(([key, val]) => `
+    <div class="filter-chip">
+      ${labels[key]}: ${val}
+      <button class="chip-remove" data-key="${key}">&times;</button>
+    </div>
+  `).join('') +
+  `<div class="filtered-summary">
+    <b>${filtered.length}</b> of ${allFlights.length} flights &middot;
+    <b>${fmtTime(totalMin)}</b> of ${fmtTime(allFlights.reduce((s,fl)=>s+fl.totalMin,0))}
+  </div>`;
+  container.querySelectorAll('.chip-remove').forEach(btn => {
+    btn.addEventListener('click', () => setFilter(btn.dataset.key, ''));
+  });
+}
+
+// ─── KPIs ───
+function buildKPIs(flights) {
+  const totalMin = flights.reduce((s, f) => s + f.totalMin, 0);
+  const sepMin = flights.reduce((s, f) => s + f.singleMin, 0);
+  const mepMin = flights.reduce((s, f) => s + f.multiMin, 0);
+  const picMin = flights.reduce((s, f) => s + f.picMin, 0);
+  const dualMin = flights.reduce((s, f) => s + f.dualMin, 0);
+  const nightMin = flights.reduce((s, f) => s + f.nightMin, 0);
+  const dayMin = totalMin - nightMin;
+  const ifrMin = flights.reduce((s, f) => s + f.ifrMin, 0);
+  const vfrMin = totalMin - ifrMin;
+  const airports = new Set(flights.flatMap(f => [f.from, f.to]));
+  const aircraft = new Set(flights.map(f => f.reg));
+  const ldg = flights.reduce((s, f) => s + f.ldgD + f.ldgN, 0);
+  const cf = getFilters();
+
+  const strip = document.getElementById('kpiStrip');
+  strip.innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Total Hours</div>
+      <div class="kpi-value">${fmtTime(totalMin)}</div>
+      <div class="kpi-sub">${flights.length} flights &middot; ${airports.size} airports</div>
+    </div>
+
+    <div class="kpi-pair ${cf.engine ? 'kpi-active' : ''}">
+      <div class="kpi-pair-title">Engine Type</div>
+      <div class="kpi-pair-row">
+        <div class="kpi-half pair-sep ${cf.engine === 'SEP' ? 'active' : ''}" data-fkey="engine" data-fval="SEP">
+          <div class="kpi-half-label">SEP</div>
+          <div class="kpi-half-value">${fmtTime(sepMin)}</div>
+          <div class="kpi-half-sub">${pct(sepMin, totalMin)}</div>
+        </div>
+        <div class="kpi-divider"></div>
+        <div class="kpi-half pair-mep ${cf.engine === 'MEP' ? 'active' : ''}" data-fkey="engine" data-fval="MEP">
+          <div class="kpi-half-label">MEP</div>
+          <div class="kpi-half-value">${fmtTime(mepMin)}</div>
+          <div class="kpi-half-sub">${pct(mepMin, totalMin)}</div>
+        </div>
+      </div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct(sepMin,totalMin)};background:var(--sep)"></div></div>
+    </div>
+
+    <div class="kpi-pair ${cf.role ? 'kpi-active' : ''}">
+      <div class="kpi-pair-title">Role</div>
+      <div class="kpi-pair-row">
+        <div class="kpi-half pair-pic ${cf.role === 'PIC' ? 'active' : ''}" data-fkey="role" data-fval="PIC">
+          <div class="kpi-half-label">PIC</div>
+          <div class="kpi-half-value">${fmtTime(picMin)}</div>
+          <div class="kpi-half-sub">${pct(picMin, totalMin)}</div>
+        </div>
+        <div class="kpi-divider"></div>
+        <div class="kpi-half pair-dual ${cf.role === 'Dual' ? 'active' : ''}" data-fkey="role" data-fval="Dual">
+          <div class="kpi-half-label">Dual</div>
+          <div class="kpi-half-value">${fmtTime(dualMin)}</div>
+          <div class="kpi-half-sub">${pct(dualMin, totalMin)}</div>
+        </div>
+      </div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct(picMin,totalMin)};background:var(--pic)"></div></div>
+    </div>
+
+    <div class="kpi-pair ${cf.rules ? 'kpi-active' : ''}">
+      <div class="kpi-pair-title">Flight Rules</div>
+      <div class="kpi-pair-row">
+        <div class="kpi-half pair-vfr ${cf.rules === 'VFR' ? 'active' : ''}" data-fkey="rules" data-fval="VFR">
+          <div class="kpi-half-label">VFR</div>
+          <div class="kpi-half-value">${fmtTime(vfrMin)}</div>
+          <div class="kpi-half-sub">${pct(vfrMin, totalMin)}</div>
+        </div>
+        <div class="kpi-divider"></div>
+        <div class="kpi-half pair-ifr ${cf.rules === 'IFR' ? 'active' : ''}" data-fkey="rules" data-fval="IFR">
+          <div class="kpi-half-label">IFR</div>
+          <div class="kpi-half-value">${fmtTime(ifrMin)}</div>
+          <div class="kpi-half-sub">${pct(ifrMin, totalMin)}</div>
+        </div>
+      </div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct(vfrMin,totalMin)};background:var(--vfr)"></div></div>
+    </div>
+
+    <div class="kpi-pair ${cf.dayNight ? 'kpi-active' : ''}">
+      <div class="kpi-pair-title">Day / Night</div>
+      <div class="kpi-pair-row">
+        <div class="kpi-half pair-day ${cf.dayNight === 'Day' ? 'active' : ''}" data-fkey="dayNight" data-fval="Day">
+          <div class="kpi-half-label">Day</div>
+          <div class="kpi-half-value">${fmtTime(dayMin)}</div>
+          <div class="kpi-half-sub">${pct(dayMin, totalMin)}</div>
+        </div>
+        <div class="kpi-divider"></div>
+        <div class="kpi-half pair-night ${cf.dayNight === 'Night' ? 'active' : ''}" data-fkey="dayNight" data-fval="Night">
+          <div class="kpi-half-label">Night</div>
+          <div class="kpi-half-value">${fmtTime(nightMin)}</div>
+          <div class="kpi-half-sub">${pct(nightMin, totalMin)}</div>
+        </div>
+      </div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct(dayMin,totalMin)};background:var(--day)"></div></div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">Landings</div>
+      <div class="kpi-value">${ldg}</div>
+      <div class="kpi-sub">${flights.reduce((s,f)=>s+f.ldgN,0)} night &middot; ${aircraft.size} aircraft</div>
+    </div>
+  `;
+
+  // Click handlers for KPI halves
+  strip.querySelectorAll('.kpi-half[data-fkey]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = el.dataset.fkey, val = el.dataset.fval;
+      setFilter(key, getFilters()[key] === val ? '' : val);
+    });
+  });
+
+  const first = flights[0]?.date, last = flights[flights.length - 1]?.date;
+  document.getElementById('headerMeta').textContent = first && last ? `${first}  \u2192  ${last}` : '';
+}
+
+// ─── Charts ───
+function destroyChart(name) {
+  if (charts[name]) { charts[name].destroy(); charts[name] = null; }
+}
+
+function buildMonthlyChart(flights) {
+  destroyChart('monthly');
+  const months = {};
+  flights.forEach(f => {
+    const m = f.date.slice(0, 7);
+    if (!months[m]) months[m] = { sep: 0, mep: 0 };
+    months[m].sep += f.singleMin;
+    months[m].mep += f.multiMin;
+  });
+  const labels = Object.keys(months).sort();
+  const rawLabels = labels;
+  const sepData = labels.map(m => +(months[m].sep / 60).toFixed(1));
+  const mepData = labels.map(m => +(months[m].mep / 60).toFixed(1));
+  const shortLabels = labels.map(l => {
+    const [y, m] = l.split('-');
+    return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m - 1] + ' ' + y.slice(2);
+  });
+
+  charts.monthly = new Chart(document.getElementById('chartMonthly'), {
+    type: 'bar',
+    data: {
+      labels: shortLabels,
+      datasets: [
+        { label: 'SEP', data: sepData, backgroundColor: '#059669', borderRadius: 4 },
+        { label: 'MEP', data: mepData, backgroundColor: '#7c3aed', borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, title: { display: true, text: 'Hours' }, grid: { color: '#f0f2f5' } }
+      },
+      onClick: (e, els) => {
+        if (!els.length) return;
+        const idx = els[0].index;
+        const month = rawLabels[idx];
+        openDrillPanel(`${shortLabels[idx]}`, flights.filter(f => f.date.startsWith(month)));
+      },
+      plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}h` } } }
+    }
+  });
+}
+
+function buildAircraftChart(flights) {
+  destroyChart('aircraft');
+  const byAC = {};
+  flights.forEach(f => {
+    const key = `${f.reg} (${f.type})`;
+    byAC[key] = (byAC[key] || 0) + f.totalMin;
+  });
+  const sorted = Object.entries(byAC).sort((a, b) => b[1] - a[1]);
+  const regMap = sorted.map(s => s[0].split(' (')[0]);
+  const colors = ['#3366ff', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#0891b2', '#ea580c'];
+
+  charts.aircraft = new Chart(document.getElementById('chartAircraft'), {
+    type: 'doughnut',
+    data: {
+      labels: sorted.map(s => s[0]),
+      datasets: [{
+        data: sorted.map(s => +(s[1] / 60).toFixed(1)),
+        backgroundColor: colors.slice(0, sorted.length),
+        borderWidth: 2, borderColor: '#fff', hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      onClick: (e, els) => {
+        if (!els.length) return;
+        setFilter('aircraft', regMap[els[0].index]);
+      },
+      plugins: {
+        legend: { position: 'right', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 12, weight: '500' } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.raw}h` } }
+      }
+    }
+  });
+}
+
+function buildConditionsChart(flights, tabType) {
+  destroyChart('conditions');
+  currentCondTab = tabType || currentCondTab;
+  const configs = {
+    engine: { keys: ['SEP', 'MEP'], fn: f => f.engine, filterKey: 'engine', colors: ['#059669', '#7c3aed'] },
+    role: { keys: ['PIC', 'Dual'], fn: f => f.role, filterKey: 'role', colors: ['#2563eb', '#d97706'] },
+    daytime: { keys: ['Day', 'Night', 'Day/Night'], fn: f => f.dayNight, filterKey: 'dayNight', colors: ['#ea580c', '#4f46e5', '#818cf8'] },
+    rules: { keys: ['VFR', 'IFR'], fn: f => f.rules, filterKey: 'rules', colors: ['#0891b2', '#dc2626'] },
+  };
+  const cfg = configs[currentCondTab];
+  const counts = {};
+  cfg.keys.forEach(k => counts[k] = 0);
+  flights.forEach(f => {
+    const v = cfg.fn(f);
+    if (counts[v] !== undefined) counts[v] += f.totalMin;
+  });
+
+  charts.conditions = new Chart(document.getElementById('chartConditions'), {
+    type: 'doughnut',
+    data: {
+      labels: cfg.keys,
+      datasets: [{
+        data: cfg.keys.map(k => +(counts[k] / 60).toFixed(1)),
+        backgroundColor: cfg.colors,
+        borderWidth: 2, borderColor: '#fff', hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      onClick: (e, els) => {
+        if (!els.length) return;
+        setFilter(cfg.filterKey, cfg.keys[els[0].index]);
+      },
+      plugins: {
+        legend: { position: 'right', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 12, weight: '500' } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.raw}h` } }
+      }
+    }
+  });
+}
+
+function buildCumulativeChart(flights) {
+  destroyChart('cumulative');
+  let cumSep = 0, cumMep = 0;
+  const data = flights.map(f => {
+    cumSep += f.singleMin; cumMep += f.multiMin;
+    return { date: f.date, sep: +(cumSep / 60).toFixed(1), mep: +(cumMep / 60).toFixed(1), total: +((cumSep + cumMep) / 60).toFixed(1) };
+  });
+  const totalH = data.length ? data[data.length - 1].total : 0;
+  document.getElementById('cumulativeSubtitle').textContent = `${totalH}h total`;
+
+  charts.cumulative = new Chart(document.getElementById('chartCumulative'), {
+    type: 'line',
+    data: {
+      labels: data.map(d => d.date),
+      datasets: [
+        { label: 'Total', data: data.map(d => d.total), borderColor: '#3366ff', backgroundColor: 'rgba(51,102,255,0.06)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2.5 },
+        { label: 'SEP', data: data.map(d => d.sep), borderColor: '#059669', tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+        { label: 'MEP', data: data.map(d => d.mep), borderColor: '#7c3aed', tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { display: true, grid: { display: false },
+          ticks: { maxTicksLimit: 8, callback: function(v) { const d = this.getLabelForValue(v); return d ? d.slice(5) : ''; } }
+        },
+        y: { title: { display: true, text: 'Hours' }, grid: { color: '#f0f2f5' } }
+      },
+      interaction: { mode: 'index', intersect: false },
+      plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}h` } } }
+    }
+  });
+}
+
+function buildRoutesChart(flights) {
+  destroyChart('routes');
+  const apCounts = {}, apFlightsMap = {};
+  flights.forEach(f => {
+    [f.from, f.to].forEach(icao => {
+      apCounts[icao] = (apCounts[icao] || 0) + 1;
+      if (!apFlightsMap[icao]) apFlightsMap[icao] = [];
+      apFlightsMap[icao].push(f);
+    });
+  });
+  const sorted = Object.entries(apCounts).sort((a, b) => b[1] - a[1]);
+  const labels = sorted.map(([icao]) => {
+    const ap = AIRPORTS[icao];
+    return ap ? `${icao} \u2013 ${ap.name}` : icao;
+  });
+
+  // Dynamic height: 28px per airport bar, minimum 200px
+  const chartEl = document.getElementById('chartRoutes').parentElement;
+  chartEl.style.height = Math.max(200, sorted.length * 28) + 'px';
+
+  charts.routes = new Chart(document.getElementById('chartRoutes'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Flights',
+        data: sorted.map(s => s[1]),
+        backgroundColor: '#ea580c', borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { title: { display: true, text: 'Flights' }, grid: { color: '#f0f2f5' } },
+        y: { grid: { display: false } }
+      },
+      onClick: (e, els) => {
+        if (!els.length) return;
+        const icao = sorted[els[0].index][0];
+        openDrillPanel(`Airport: ${labels[els[0].index]}`, apFlightsMap[icao] || []);
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `${ctx.raw} flights` } }
+      }
+    }
+  });
+}
+
+// ─── Map ───
+function buildMap(flights) {
+  if (!leafletMap) {
+    leafletMap = L.map('map', { zoomControl: true }).setView([61.5, 24.5], 6);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OSM &copy; CARTO',
+      subdomains: 'abcd', maxZoom: 16
+    }).addTo(leafletMap);
+  }
+  mapLayers.forEach(l => leafletMap.removeLayer(l));
+  mapLayers = [];
+
+  const routeCounts = {}, airportCounts = {};
+  flights.forEach(f => {
+    [f.from, f.to].forEach(a => { airportCounts[a] = (airportCounts[a] || 0) + 1; });
+    if (f.from !== f.to) {
+      const key = [f.from, f.to].sort().join('|');
+      if (!routeCounts[key]) routeCounts[key] = { from: f.from, to: f.to, count: 0, totalMin: 0, flights: [] };
+      routeCounts[key].count++;
+      routeCounts[key].totalMin += f.totalMin;
+      routeCounts[key].flights.push(f);
+    }
+  });
+
+  Object.values(routeCounts).forEach(r => {
+    const a1 = AIRPORTS[r.from], a2 = AIRPORTS[r.to];
+    if (!a1 || !a2) return;
+    const weight = Math.max(1.5, Math.min(5, r.count / 3));
+    const opacity = Math.max(0.3, Math.min(0.7, r.count / 10));
+    const line = L.polyline([[a1.lat, a1.lon], [a2.lat, a2.lon]], {
+      color: '#3366ff', weight, opacity,
+    }).addTo(leafletMap);
+    line.bindTooltip(`<b>${r.from} \u2013 ${r.to}</b><br>${r.count} flights, ${fmtTime(r.totalMin)}`, { sticky: true, className: 'airport-tooltip route-tooltip' });
+    line.on('click', () => openDrillPanel(`${r.from} \u2013 ${r.to}`, r.flights));
+    mapLayers.push(line);
+  });
+
+  Object.entries(airportCounts).forEach(([icao, count]) => {
+    const ap = AIRPORTS[icao];
+    if (!ap) return;
+    const radius = 6;
+    const marker = L.circleMarker([ap.lat, ap.lon], {
+      radius, fillColor: '#ea580c', fillOpacity: 0.85, color: '#fff', weight: 2,
+    }).addTo(leafletMap);
+    const apFlights = flights.filter(f => f.from === icao || f.to === icao);
+    const totalMin = apFlights.reduce((s, f) => s + f.totalMin, 0);
+    const depCount = flights.filter(f => f.from === icao).length;
+    const arrCount = flights.filter(f => f.to === icao).length;
+    // Permanent ICAO label
+    marker.bindTooltip(icao, { permanent: true, direction: 'right', offset: [8, 0], className: 'icao-label' });
+    // Hover detail popup
+    marker.on('mouseover', function() {
+      marker.unbindTooltip();
+      marker.bindTooltip(
+        `<b>${icao}</b> \u2013 ${ap.name}<br>${count} flights (${fmtTime(totalMin)})<br>${depCount} dep, ${arrCount} arr`,
+        { direction: 'top', offset: [0, -10], className: 'airport-tooltip' }
+      ).openTooltip();
+    });
+    marker.on('mouseout', function() {
+      marker.unbindTooltip();
+      marker.bindTooltip(icao, { permanent: true, direction: 'right', offset: [8, 0], className: 'icao-label' });
+    });
+    marker.on('click', () => openDrillPanel(`${icao} \u2013 ${ap.name}`, apFlights));
+    mapLayers.push(marker);
+  });
+
+  mapBounds = Object.keys(airportCounts).map(k => AIRPORTS[k]).filter(Boolean).map(a => [a.lat, a.lon]);
+  if (mapBounds.length) leafletMap.fitBounds(mapBounds, { padding: [30, 30] });
+  document.getElementById('mapSubtitle').textContent =
+    `${Object.keys(airportCounts).length} airports \u00B7 ${Object.keys(routeCounts).length} routes`;
+}
+
+// ─── Drill-down panel ───
+function openDrillPanel(title, flights) {
+  document.getElementById('drillTitle').textContent = title;
+  const totalMin = flights.reduce((s, f) => s + f.totalMin, 0);
+  const picMin = flights.reduce((s, f) => s + f.picMin, 0);
+  const ifrMin = flights.reduce((s, f) => s + f.ifrMin, 0);
+  const nightMin = flights.reduce((s, f) => s + f.nightMin, 0);
+  const sepMin = flights.reduce((s, f) => s + f.singleMin, 0);
+  const mepMin = flights.reduce((s, f) => s + f.multiMin, 0);
+
+  document.getElementById('drillStats').innerHTML = `
+    <div class="drill-stat"><div class="drill-stat-label">Flights</div><div class="drill-stat-value">${flights.length}</div></div>
+    <div class="drill-stat"><div class="drill-stat-label">Total</div><div class="drill-stat-value">${fmtTime(totalMin)}</div></div>
+    <div class="drill-stat"><div class="drill-stat-label">PIC</div><div class="drill-stat-value">${fmtTime(picMin)}</div></div>
+    <div class="drill-stat"><div class="drill-stat-label">SEP</div><div class="drill-stat-value">${fmtTime(sepMin)}</div></div>
+    <div class="drill-stat"><div class="drill-stat-label">MEP</div><div class="drill-stat-value">${fmtTime(mepMin)}</div></div>
+    <div class="drill-stat"><div class="drill-stat-label">IFR</div><div class="drill-stat-value">${fmtTime(ifrMin)}</div></div>
+    <div class="drill-stat"><div class="drill-stat-label">Night</div><div class="drill-stat-value">${fmtTime(nightMin)}</div></div>
+    <div class="drill-stat"><div class="drill-stat-label">Dual</div><div class="drill-stat-value">${fmtTime(totalMin - picMin)}</div></div>
+    <div class="drill-stat"><div class="drill-stat-label">VFR</div><div class="drill-stat-value">${fmtTime(totalMin - ifrMin)}</div></div>
+  `;
+  const sorted = [...flights].sort((a, b) => b.date.localeCompare(a.date));
+  document.getElementById('drillTableBody').innerHTML = sorted.map(f => `
+    <tr>
+      <td>${f.date}</td><td>${f.reg}</td><td>${f.from}</td><td>${f.to}</td>
+      <td>${fmtTime(f.totalMin)}</td>
+      <td><span class="pill pill-${f.engine.toLowerCase()}">${f.engine}</span></td>
+      <td><span class="pill pill-${f.role.toLowerCase()}">${f.role}</span></td>
+      <td>${f.rules}</td>
+    </tr>
+  `).join('');
+  document.getElementById('drillPanel').classList.add('open');
+  document.getElementById('drillOverlay').classList.add('open');
+}
+
+function closeDrillPanel() {
+  document.getElementById('drillPanel').classList.remove('open');
+  document.getElementById('drillOverlay').classList.remove('open');
+}
+
+// ─── Table ───
+function renderTable(flights) {
+  const sorted = [...flights].sort((a, b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if (sortCol === 'duration') { va = a.totalMin; vb = b.totalMin; }
+    if (sortCol === 'ldgD') { va = a.ldgD; vb = b.ldgD; }
+    if (sortCol === 'ldgN') { va = a.ldgN; vb = b.ldgN; }
+    if (typeof va === 'string') return sortDir * va.localeCompare(vb);
+    return sortDir * ((va || 0) - (vb || 0));
+  });
+
+  const totalMin = flights.reduce((s, f) => s + f.totalMin, 0);
+  const picMin = flights.reduce((s, f) => s + f.picMin, 0);
+  const ifrMin = flights.reduce((s, f) => s + f.ifrMin, 0);
+  const nightMin = flights.reduce((s, f) => s + f.nightMin, 0);
+  const sepMin = flights.reduce((s, f) => s + f.singleMin, 0);
+  const mepMin = flights.reduce((s, f) => s + f.multiMin, 0);
+  const ldg = flights.reduce((s, f) => s + f.ldgD + f.ldgN, 0);
+
+  document.getElementById('tableSummary').innerHTML = `
+    <div><b>${flights.length}</b> flights</div>
+    <div>Total: <b>${fmtTime(totalMin)}</b></div>
+    <div>SEP: <b>${fmtTime(sepMin)}</b></div>
+    <div>MEP: <b>${fmtTime(mepMin)}</b></div>
+    <div>PIC: <b>${fmtTime(picMin)}</b></div>
+    <div>Dual: <b>${fmtTime(totalMin - picMin)}</b></div>
+    <div>VFR: <b>${fmtTime(totalMin - ifrMin)}</b></div>
+    <div>IFR: <b>${fmtTime(ifrMin)}</b></div>
+    <div>Night: <b>${fmtTime(nightMin)}</b></div>
+    <div>Landings: <b>${ldg}</b></div>
+  `;
+  document.getElementById('tableSubtitle').textContent =
+    hasActiveFilters() ? 'Filtered view' : 'All flights';
+
+  const tbody = document.getElementById('flightTableBody');
+  tbody.innerHTML = sorted.map(f => `
+    <tr>
+      <td style="color:var(--text);font-weight:500">${f.date}</td>
+      <td style="font-weight:600">${f.reg}</td>
+      <td>${f.type}</td>
+      <td class="clickable-cell" data-fkey="airport" data-fval="${f.from}" style="cursor:pointer;color:var(--accent)">${f.from}</td>
+      <td class="clickable-cell" data-fkey="airport" data-fval="${f.to}" style="cursor:pointer;color:var(--accent)">${f.to}</td>
+      <td style="font-weight:600;color:var(--text)">${fmtTime(f.totalMin)}</td>
+      <td><span class="pill pill-${f.engine.toLowerCase()}" data-fkey="engine" data-fval="${f.engine}">${f.engine}</span></td>
+      <td><span class="pill pill-${f.role.toLowerCase()}" data-fkey="role" data-fval="${f.role}">${f.role}</span></td>
+      <td>${f.dayNight}</td>
+      <td>${f.rules}</td>
+      <td>${f.ldgD || ''}</td>
+      <td>${f.ldgN || ''}</td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('[data-fkey]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setFilter(el.dataset.fkey, el.dataset.fval);
+    });
+  });
+}
+
+// ─── Populate dropdowns ───
+function populateFilterDropdowns() {
+  const unique = (arr) => [...new Set(arr)].sort();
+  const addOptions = (sel, values) => {
+    const current = sel.value;
+    const firstOpt = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(firstOpt);
+    values.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      sel.appendChild(opt);
+    });
+    sel.value = current;
+  };
+  addOptions(document.getElementById('gfAircraft'), unique(allFlights.map(f => f.reg)));
+  addOptions(document.getElementById('gfType'), unique(allFlights.map(f => f.type)));
+  addOptions(document.getElementById('gfAirport'), unique(allFlights.flatMap(f => [f.from, f.to])));
+}
+
+// ─── Master refresh ───
+function refreshAll() {
+  const filtered = applyFilters(allFlights);
+  renderFilterChips();
+  buildKPIs(filtered);
+  buildMonthlyChart(filtered);
+  buildAircraftChart(filtered);
+  buildConditionsChart(filtered);
+  buildCumulativeChart(filtered);
+  buildRoutesChart(filtered);
+  buildMap(filtered);
+  renderTable(filtered);
+}
+
+// ─── Event listeners ───
+document.querySelectorAll('#flightTable th').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) sortDir *= -1;
+    else { sortCol = col; sortDir = 1; }
+    document.querySelectorAll('#flightTable th .sort-arrow').forEach(s => s.textContent = '');
+    th.querySelector('.sort-arrow').textContent = sortDir === 1 ? ' \u25B2' : ' \u25BC';
+    renderTable(applyFilters(allFlights));
+  });
+});
+
+document.querySelector('.global-filters').addEventListener('change', () => refreshAll());
+document.getElementById('btnReset').addEventListener('click', resetFilters);
+document.getElementById('btnReload').addEventListener('click', async () => {
+  const btn = document.getElementById('btnReload');
+  btn.disabled = true; btn.textContent = 'Loading…';
+  try {
+    const resp = await fetch(SHEET_URL);
+    const text = await resp.text();
+    allFlights = parseFlights(parseCSV(text));
+    await resolveUnknownAirports(allFlights);
+    populateFilterDropdowns();
+    refreshAll();
+  } catch (err) {
+    console.error('Reload failed:', err);
+  }
+  btn.disabled = false; btn.textContent = 'Reload';
+});
+
+// Wire native date pickers to yyyy-mm-dd text displays
+document.querySelectorAll('.date-input-wrap').forEach(wrap => {
+  const display = wrap.querySelector('.date-display');
+  const native = wrap.querySelector('.date-native');
+  native.addEventListener('change', () => {
+    display.value = native.value; // native .value is always yyyy-mm-dd
+    document.getElementById('gfPeriod').value = ''; // manual date clears period
+    display.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+});
+
+// Period dropdown → set date range (refreshAll is triggered by global-filters change listener)
+document.getElementById('gfPeriod').addEventListener('change', () => {
+  const val = document.getElementById('gfPeriod').value;
+  const fromEl = document.getElementById('gfDateFrom');
+  const toEl = document.getElementById('gfDateTo');
+  let dateFrom = '', dateTo = '';
+  if (val) {
+    const today = new Date();
+    const fmt = d => d.toISOString().slice(0, 10);
+    dateTo = fmt(today);
+    if (val === 'ytd') {
+      dateFrom = today.getFullYear() + '-01-01';
+    } else if (val === 'lastyear') {
+      const ly = today.getFullYear() - 1;
+      dateFrom = ly + '-01-01';
+      dateTo = ly + '-12-31';
+    } else {
+      const days = parseInt(val);
+      const past = new Date(today);
+      past.setDate(past.getDate() - days);
+      dateFrom = fmt(past);
+    }
+  }
+  fromEl.value = dateFrom;
+  toEl.value = dateTo;
+  document.querySelectorAll('.date-native').forEach((el, i) => {
+    el.value = i === 0 ? dateFrom : dateTo;
+  });
+});
+
+document.getElementById('condTabs').addEventListener('click', (e) => {
+  if (!e.target.classList.contains('tab-btn')) return;
+  document.querySelectorAll('#condTabs .tab-btn').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  buildConditionsChart(applyFilters(allFlights), e.target.dataset.tab);
+});
+
+document.getElementById('drillClose').addEventListener('click', closeDrillPanel);
+document.getElementById('drillOverlay').addEventListener('click', closeDrillPanel);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrillPanel(); });
+
+document.getElementById('btnMapCenter').addEventListener('click', () => {
+  if (leafletMap && mapBounds.length) {
+    leafletMap.fitBounds(mapBounds, { padding: [30, 30], maxZoom: 14 });
+  }
+});
+
+// Resize map when window/orientation changes
+window.addEventListener('resize', () => {
+  if (leafletMap) {
+    leafletMap.invalidateSize();
+  }
+});
+
+// ─── Init ───
+(async () => {
+  try {
+    const resp = await fetch(SHEET_URL);
+    const text = await resp.text();
+    allFlights = parseFlights(parseCSV(text));
+    await resolveUnknownAirports(allFlights);
+    populateFilterDropdowns();
+    refreshAll();
+    document.getElementById('loading').classList.add('hidden');
+  } catch (err) {
+    console.error('Failed to load data:', err);
+    document.getElementById('loading').innerHTML = `
+      <div style="color:#dc2626; font-size:16px; font-weight:600;">Failed to load flight data</div>
+      <div style="color:var(--text-dim); font-size:13px;">${err.message}</div>
+    `;
+  }
+})();
+
+// Register service worker for PWA / Add to Home Screen
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
