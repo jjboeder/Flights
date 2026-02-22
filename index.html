@@ -622,7 +622,7 @@
       </div>
     </div>
     <button class="btn-reset" id="btnReset">Reset</button>
-    <button class="btn-reset" id="btnReload" style="margin-left:auto">Reload</button>
+    <button class="btn-reset" id="btnReload" style="margin-left:auto" title="Reload data">&#x21bb;</button>
   </div>
 </div>
 
@@ -1553,7 +1553,7 @@ document.querySelector('.global-filters').addEventListener('change', () => refre
 document.getElementById('btnReset').addEventListener('click', resetFilters);
 document.getElementById('btnReload').addEventListener('click', async () => {
   const btn = document.getElementById('btnReload');
-  btn.disabled = true; btn.textContent = 'Loading…';
+  btn.disabled = true; btn.style.opacity = '0.5'; btn.style.animation = 'spin 1s linear infinite';
   try {
     const resp = await fetch(SHEET_URL);
     const text = await resp.text();
@@ -1564,7 +1564,7 @@ document.getElementById('btnReload').addEventListener('click', async () => {
   } catch (err) {
     console.error('Reload failed:', err);
   }
-  btn.disabled = false; btn.textContent = 'Reload';
+  btn.disabled = false; btn.style.opacity = '1'; btn.style.animation = 'none';
 });
 
 // Wire native date pickers to yyyy-mm-dd text displays
